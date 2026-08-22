@@ -8,11 +8,16 @@
 #    from the Finder, where PATH is minimal.
 set -euo pipefail
 
-PYTHON=/opt/homebrew/bin/python3
+# Homebrew sits at /opt/homebrew on Apple Silicon and /usr/local on Intel, and
+# macOS 15 still runs on the 2019-2020 Intel machines the README promises to
+# support. Ask for the prefix rather than assume one.
+PYTHON="$(brew --prefix 2>/dev/null)/bin/python3"
+[ -x "$PYTHON" ] || PYTHON=/opt/homebrew/bin/python3
+[ -x "$PYTHON" ] || PYTHON=/usr/local/bin/python3
 VENV="$HOME/.local/share/anole/venv"
 PINNED="pymobiledevice3==10.10.3"
 
-[ -x "$PYTHON" ] || { echo "Homebrew Python not found: $PYTHON"; exit 1; }
+[ -x "$PYTHON" ] || { echo "Homebrew Python not found. Install it with: brew install python"; exit 1; }
 
 echo "==> venv: $VENV"
 mkdir -p "$(dirname "$VENV")"

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Builds Resources/Anole.icns from Resources/icon-1024.png.
+# Builds Resources/Anole.icns from Resources/icon-macos-1024.png.
 #
 # macOS expects ten variants: every logical size exists at single and double
 # density. iconutil rejects the iconset if a single one is missing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SOURCE="Resources/icon-1024.png"
+SOURCE="Resources/icon-macos-1024.png"
 ICONSET="Resources/Anole.iconset"
 [ -f "$SOURCE" ] || { echo "Missing source: $SOURCE"; exit 1; }
 

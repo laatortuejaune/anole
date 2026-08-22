@@ -57,6 +57,6 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 
 echo "==> Ad-hoc signing"
-codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1
+codesign --force --sign - --timestamp=none "$APP"
 
 echo "==> Ready: $APP"

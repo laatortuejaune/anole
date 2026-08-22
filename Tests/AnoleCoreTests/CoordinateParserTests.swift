@@ -5,6 +5,32 @@ import Foundation
 @Suite("Coordinate parsing")
 struct CoordinateParserTests {
 
+    /// The letters came before the numbers and no comma separated the halves —
+    /// the form people actually paste out of a map app. The W was relabelling
+    /// the latitude the N had already claimed, and `validated` then "repaired"
+    /// the impossible pair by swapping it: the Indian Ocean instead of San
+    /// Francisco, with no error at all.
+    @Test("Prefixed hemispheres separated by a space keep their own number")
+    func prefixedHemispheresWithoutComma() {
+        expect("N37.7793 W122.4193", lat: 37.7793, lon: -122.4193)
+        expect("W122.4193 N37.7793", lat: 37.7793, lon: -122.4193)
+        expect("S37.7793 E122.4193", lat: -37.7793, lon: 122.4193)
+    }
+
+    @Test("A comma between prefixed hemispheres still works")
+    func prefixedHemispheresWithComma() {
+        expect("N37.7793, W122.4193", lat: 37.7793, lon: -122.4193)
+    }
+
+    /// Minus zero is the only degree whose sign survives nowhere but the sign
+    /// bit, and it covers the equator and the Greenwich meridian.
+    @Test("A degree of minus zero keeps its sign")
+    func minusZeroDegree() {
+        expect("-0 30, 5", lat: -0.5, lon: 5)
+        expect("-0 30 0, -0 15 0", lat: -0.5, lon: -0.25)
+        expect("0 30, 5", lat: 0.5, lon: 5)
+    }
+
     func expect(_ input: String, lat: Double, lon: Double, tolerance: Double = 0.0002) {
         guard let parsed = CoordinateParser.parse(input) else {
             Issue.record("'\(input)' was not recognized")

@@ -154,7 +154,17 @@ public enum CoordinateParser {
 
         for character in text {
             if "NSEW".contains(character) {
-                if buffer.contains(where: \.isNumber) {
+                if let pending = pendingHemisphere, buffer.contains(where: \.isNumber) {
+                    // A prefix already claimed the number being read, and the
+                    // letter arriving now opens the next half - it does not
+                    // relabel the previous one. Without this, "N37.7793
+                    // W122.4193" handed 37.7793 to the W and 122.4193 to the N,
+                    // and `validated` then "repaired" the impossible latitude by
+                    // swapping the pair: the Indian Ocean, silently, instead of
+                    // San Francisco.
+                    flush(pending)
+                    pendingHemisphere = character
+                } else if buffer.contains(where: \.isNumber) {
                     flush(character)          // hemisphere as a suffix
                 } else {
                     pendingHemisphere = character   // hemisphere as a prefix
@@ -197,7 +207,10 @@ public enum CoordinateParser {
             values.append(value)
         }
 
-        let negative = values[0] < 0
+        // `-0 30` is half a degree south, and `values[0] < 0` is false for
+        // minus zero: the sign bit is the only thing that still carries it.
+        // The band matters - the equator and the Greenwich meridian.
+        let negative = values[0].sign == .minus
         var total = abs(values[0])
         if values.count > 1 {
             guard values[1] >= 0, values[1] < 60 else { return nil }

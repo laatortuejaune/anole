@@ -127,6 +127,10 @@ to install the Python helper the app drives.
 
 ## Building
 
+Building needs the full Xcode, not the command line tools alone: SwiftUI's
+macros ship with it. The iOS project additionally needs
+[XcodeGen](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`.
+
 ```bash
 # macOS
 ./Scripts/setup-backend.sh          # once
@@ -134,6 +138,7 @@ swift test                          # 163 tests
 ./Scripts/build-app.sh release      # produces build/Anole.app
 
 # iOS — the Xcode project is generated, never edit the .xcodeproj
+./Scripts/build-idevice.sh          # builds Vendor/IDevice.xcframework
 export DEVELOPMENT_TEAM=XXXXXXXXXX  # your Apple team ID
 xcodegen generate
 xcodebuild -project AnoleiOS.xcodeproj -scheme AnoleiOS \
