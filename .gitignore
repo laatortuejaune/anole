@@ -31,3 +31,4 @@ __pycache__/
 .swiftpm/
 .vscode/
 .idea/
+dist/
