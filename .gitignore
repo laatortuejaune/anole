@@ -1,0 +1,33 @@
+# Build products
+.build/
+build/
+DerivedData/
+*.xcuserdatad
+*.xcuserstate
+
+# Generated Xcode project — regenerate with `xcodegen generate`
+AnoleiOS.xcodeproj/
+
+# Vendored binary framework — build it with Scripts/build-idevice.sh
+Vendor/
+
+# Device-specific files, never commit these
+pairing.plist
+Image.dmg
+Image.dmg.trustcache
+BuildManifest.plist
+*.mobileprovision
+*.p12
+
+# macOS
+.DS_Store
+Resources/Anole.icns
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor and tooling state
+.swiftpm/
+.vscode/
+.idea/
