@@ -108,11 +108,20 @@ public enum MapKitRouteProvider {
             latitude: coordinate.latitude,
             longitude: coordinate.longitude
         )
+        // The macOS 26 initialiser has to be hidden from older compilers as well
+        // as from older systems. `#available` guards what runs, not what
+        // builds: a toolchain whose SDK predates the API cannot compile the
+        // branch at all, and the whole package fails on a stable Xcode. CI
+        // caught that on the first run.
+        #if compiler(>=6.2)
         if #available(macOS 26.0, iOS 26.0, *) {
-            return MKMapItem(location: CLLocation(latitude: point.latitude, longitude: point.longitude), address: nil)
-        } else {
-            return MKMapItem(placemark: MKPlacemark(coordinate: point))
+            return MKMapItem(
+                location: CLLocation(latitude: point.latitude, longitude: point.longitude),
+                address: nil
+            )
         }
+        #endif
+        return MKMapItem(placemark: MKPlacemark(coordinate: point))
     }
 
     /// Mode actually asked of the service. MapKit does not know cycling: we

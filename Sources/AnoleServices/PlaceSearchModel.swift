@@ -155,14 +155,17 @@ public final class PlaceSearchModel: NSObject, ObservableObject {
     // MARK: - Utilities
 
     nonisolated private static func coordinate(of item: MKMapItem) -> Coordinate {
-        // `placemark` is deprecated from macOS 26 on in favor of `location`,
-        // but it remains the only path available below that version.
-        let point: CLLocationCoordinate2D
+        // `placemark` is deprecated from macOS 26 on in favor of `location`, but
+        // it stays the only path below that version - and the only one a
+        // compiler older than the API can even parse, hence the build guard as
+        // well as the availability one.
+        #if compiler(>=6.2)
         if #available(macOS 26.0, iOS 26.0, *) {
-            point = item.location.coordinate
-        } else {
-            point = item.placemark.coordinate
+            let point = item.location.coordinate
+            return Coordinate(latitude: point.latitude, longitude: point.longitude)
         }
+        #endif
+        let point = item.placemark.coordinate
         return Coordinate(latitude: point.latitude, longitude: point.longitude)
     }
 
