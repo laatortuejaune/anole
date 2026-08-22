@@ -1,5 +1,7 @@
 # Anole
 
+[![Tests](https://github.com/laatortuejaune/anole/actions/workflows/tests.yml/badge.svg)](https://github.com/laatortuejaune/anole/actions/workflows/tests.yml)
+
 Simulate your iPhone's GPS location — from your Mac, or from the iPhone itself.
 
 Anole is two apps sharing one core: a **macOS app** that drives a tethered
@@ -42,8 +44,9 @@ A sharp turn also brakes what precedes it, propagated backwards — the way a ca
 actually behaves.
 
 **It matches the real travel time.** Driving at the posted speed limit produces a
-trip roughly **48% too fast**, because the limit ignores roundabouts, traffic
-lights and congestion. So Anole takes the duration the routing service predicts
+trip roughly **48% too fast** — measured on a 36.7 km mixed route, where holding
+the limit throughout took 1587 s against the 2344 s the routing service
+predicted. The limit ignores roundabouts, traffic lights and congestion. So Anole takes the duration the routing service predicts
 and redistributes it across the path with a physical speed profile, calibrated by
 bisection. Speed genuinely varies along the route, and the arrival time is right.
 
@@ -54,6 +57,8 @@ motorway now accelerates when the road allows it instead of holding one average
 throughout, and no stretch is ever driven above what it permits. Only 17% of ways
 carry an explicit `maxspeed` in the samples this was tested against, so the road
 class fills the rest, with street lighting standing in for "this is a town".
+That 17% was counted over a 96-way sample on a French suburban corridor; coverage
+varies widely by country and by how surveyed the area is.
 
 Speed limits are an improvement, never a requirement: no network, a slow server
 or an unsurveyed region simply leaves the trip running on the pace of the mode,
@@ -82,7 +87,7 @@ the iOS port possible without rewriting any logic.
 | `AnoleMac` | macOS interface | macOS |
 | `AnoleiOS` | iOS interface and on-device backend | iOS |
 
-About 70% of the code is shared. 129 tests cover the core.
+About 70% of the code is shared. 163 tests cover it.
 
 ## Requirements
 
@@ -125,7 +130,7 @@ to install the Python helper the app drives.
 ```bash
 # macOS
 ./Scripts/setup-backend.sh          # once
-swift test                          # 129 tests
+swift test                          # 163 tests
 ./Scripts/build-app.sh release      # produces build/Anole.app
 
 # iOS — the Xcode project is generated, never edit the .xcodeproj
@@ -152,6 +157,11 @@ copy it over with `devicectl`. See `ARCHITECTURE.md` for the full procedure.
 - Apps can detect simulated location through
   `CLLocation.sourceInformation.isSimulatedBySoftware`, and services that
   cross-check GPS against cell towers or implausible speed will notice.
+- **This rests on reverse-engineered Apple services.** Neither pymobiledevice3
+  nor idevice speaks a documented protocol, and a major iOS release can break
+  either of them on a schedule nobody here controls. It has held across iOS 17,
+  18 and 26 so far, but a project with one maintainer on that footing is worth
+  knowing about before you build on it.
 
 ## Intended use
 

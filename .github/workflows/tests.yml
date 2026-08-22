@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # So a stale dependency or a new Xcode is caught before someone else finds it.
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  test:
+    # The package declares macOS 15, and SwiftUI needs a full Xcode rather than
+    # the command line tools alone.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test

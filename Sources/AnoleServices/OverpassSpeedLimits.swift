@@ -21,7 +21,12 @@ public actor OverpassSpeedLimits {
     private let endpoint = URL(string: "https://overpass-api.de/api/interpreter")!
     private let userAgent = "Anole/0.1 (+https://github.com/laatortuejaune/anole)"
     /// Past this, the trip leaves without limits rather than keep the user waiting.
-    private let timeout: TimeInterval = 12
+    private let timeout: TimeInterval = 10
+    /// A public instance under load refuses outright and recovers seconds later.
+    /// One retry turns most of those refusals into an answer; a second would
+    /// only make the user wait longer for a server that is genuinely down.
+    private let attempts = 2
+    private let pauseBetweenAttempts: TimeInterval = 1.5
     /// Length of track covered by one query zone, in metres.
     private let zoneLength: Double = 3000
     /// Ceiling on the number of zones; beyond it they are made longer instead.
@@ -64,18 +69,24 @@ public actor OverpassSpeedLimits {
         let key = cacheKey(for: zones)
         if let cached = cache[key] { return cached }
 
-        do {
-            let segments = try await fetch(zones: zones)
-            cache[key] = segments
-            lastFailure = segments.isEmpty ? "no road found in the area" : nil
-            return segments
-        } catch let error as URLError where error.code == .timedOut {
-            lastFailure = "server too slow"
-            return []
-        } catch {
-            lastFailure = "unreachable"
-            return []
+        var failure = "unreachable"
+        for attempt in 1...attempts {
+            do {
+                let segments = try await fetch(zones: zones)
+                cache[key] = segments
+                lastFailure = segments.isEmpty ? "no road found in the area" : nil
+                return segments
+            } catch let error as URLError where error.code == .timedOut {
+                failure = "server too slow"
+            } catch {
+                failure = "unreachable"
+            }
+            if attempt < attempts {
+                try? await Task.sleep(nanoseconds: UInt64(pauseBetweenAttempts * 1_000_000_000))
+            }
         }
+        lastFailure = failure
+        return []
     }
 
     // MARK: - Query
