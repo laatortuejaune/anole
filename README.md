@@ -81,10 +81,10 @@ Both apps need **Developer Mode** enabled on the iPhone
 `Scripts/setup-backend.sh`.
 
 The iPhone needs a cable **only for the first pairing**. After that it stays
-reachable over the local network, and Anole works with nothing plugged in —
-it shows which link it is using. Wi-Fi is convenient but less dependable: the
-link can drop when the phone locks or falls asleep, so plug it in for a long
-trip.
+reachable over the local network, and Anole works with nothing plugged in — it
+shows which link it is using. A long trip has been driven over Wi-Fi with the
+phone locked and in a pocket, so this is not a degraded mode; USB is simply
+preferred when both are available.
 
 **iOS app** — iOS 17+, an Apple Developer account (the free tier works), and
 [LocalDevVPN](https://apps.apple.com/app/id6755608044) from the App Store.

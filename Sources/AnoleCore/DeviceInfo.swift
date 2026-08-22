@@ -47,8 +47,9 @@ public struct DeviceInfo: Identifiable, Hashable, Sendable {
         }
     }
 
-    /// Wi-Fi works, but the link can drop when the screen locks or the device
-    /// goes into deep sleep. Worth warning about before a long trip.
+    /// Whether the device is reached over the network rather than a cable.
+    /// Wi-Fi holds up in practice, locked screen included; USB is still
+    /// preferred when both are available.
     public var isWireless: Bool { connectionKind == .network }
 
     public var displayName: String {

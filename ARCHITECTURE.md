@@ -78,8 +78,11 @@ tunnel and the DTX channel work over it. `usbmux list` then returns the same
 device twice, once as `USB` and once as `Network`.
 
 `DeviceListing` merges the duplicate and prefers USB when both are available.
-The interface shows which link is in use, because a Wi-Fi drop mid-trip is
+The interface shows which link is in use, because a dropped link mid-trip is
 otherwise indistinguishable from a bug.
+
+Measured, not assumed: a long trip runs to completion over Wi-Fi with the phone
+locked. Wireless is a first-class mode here, not a fallback.
 
 ## Constraints worth knowing
 

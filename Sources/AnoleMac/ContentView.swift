@@ -174,8 +174,9 @@ struct ContentView: View {
                             }
                         }
                         if device.isWireless {
-                            Text("Wi-Fi works, but the link can drop when the iPhone "
-                                 + "locks or sleeps. Plug it in for a long trip.")
+                            Text("No cable needed. A long trip has been driven this "
+                                 + "way with the phone locked; plug it in if the link "
+                                 + "ever drops.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
