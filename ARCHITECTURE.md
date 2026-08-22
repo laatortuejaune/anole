@@ -143,6 +143,28 @@ cruise factor. The speed really does vary, and the arrival time is right.
 table indexed by elapsed time. A send that drags therefore does not shift the
 trip, it skips a point.
 
+### Where the limits come from
+
+MapKit gives a polyline and a duration, never the identity of the roads. The
+limits are recovered by matching the track against OpenStreetMap through the
+Overpass API (`OverpassSpeedLimits`), one query covering every route candidate.
+`SpeedLimitMatcher` then probes the track every 25 m and asks which segment it
+is on: nearest wins, but only among segments whose heading agrees within 45°.
+That gate is what stops a crossing road at a junction from dropping its own
+limit across the middle of a trunk road; distance alone handles the service road
+running parallel.
+
+Each stretch feeds `SpeedSample`: `legalLimit` is a hard ceiling, `travelSpeed`
+is that limit times the class flow factor — the diffuse loss from traffic and
+merges, *not* stops and turns, which the planner already models and would
+otherwise count twice. Bisection then scales the whole thing onto the announced
+duration, so the total stays exact while the distribution becomes right.
+
+Every failure is silent by design: `segments()` returns an empty array, the
+planner falls back on the pace of the mode, and the trip leaves regardless.
+Overpass runs on donated hardware, hence the 300-probe ceiling, the cache and
+the identifying user agent.
+
 ## Error codes
 
 Numbered in `Sources/AnoleCore/ErrorCodes.swift`, displayed in brackets.

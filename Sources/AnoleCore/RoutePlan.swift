@@ -18,6 +18,10 @@ public struct RoutePlan: Sendable, Identifiable {
     public var routingBasis: TransportMode
     public var hasTolls: Bool
     public var hasHighways: Bool
+    /// Speed limits recovered for this route, one entry per stretch of constant
+    /// limit. Empty when they could not be fetched, which is not an error: the
+    /// planner then falls back on the pace of the mode.
+    public var speedSamples: [SpeedSample]
 
     public init(
         id: String,
@@ -29,7 +33,8 @@ public struct RoutePlan: Sendable, Identifiable {
         mode: TransportMode,
         routingBasis: TransportMode? = nil,
         hasTolls: Bool = false,
-        hasHighways: Bool = false
+        hasHighways: Bool = false,
+        speedSamples: [SpeedSample] = []
     ) {
         self.id = id
         self.name = name
@@ -41,6 +46,7 @@ public struct RoutePlan: Sendable, Identifiable {
         self.routingBasis = routingBasis ?? mode
         self.hasTolls = hasTolls
         self.hasHighways = hasHighways
+        self.speedSamples = speedSamples
     }
 
     public var geometry: PathGeometry? { PathGeometry(coordinates) }

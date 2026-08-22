@@ -22,6 +22,8 @@ public struct TripSchedule: Sendable {
 
     private let step: Double
     private let speeds: [Double]
+    /// Legal limit at each node, when it is known.
+    private let limits: [Double?]
     /// Arrival instant at each node.
     private let arrival: [TimeInterval]
     /// Departure instant from each node: same as the arrival, except at stops.
@@ -35,6 +37,7 @@ public struct TripSchedule: Sendable {
 
         let speeds = planner.speeds(cruiseScale: cruiseScale)
         self.speeds = speeds
+        self.limits = planner.legalCeiling
 
         var arrival = [TimeInterval](repeating: 0, count: speeds.count)
         var departure = [TimeInterval](repeating: 0, count: speeds.count)
@@ -49,6 +52,20 @@ public struct TripSchedule: Sendable {
         self.arrival = arrival
         self.departure = departure
         self.duration = arrival[speeds.count - 1]
+    }
+
+    /// True when at least one stretch of the trip carries a known limit.
+    ///
+    /// This is what tells a trip running on real road data apart from one
+    /// running on the pace of the mode - a distinction that is otherwise
+    /// invisible, and was the reason a wrong speed could not be diagnosed.
+    public var hasSpeedLimits: Bool { limits.contains { $0 != nil } }
+
+    /// Legal limit under the moving point, in m/s.
+    public func legalLimit(at elapsed: TimeInterval) -> Double? {
+        guard duration > 0, !limits.isEmpty else { return nil }
+        let clamped = min(max(elapsed, 0), duration)
+        return limits[nodeIndex(at: clamped)]
     }
 
     // MARK: - Reading

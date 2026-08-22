@@ -47,6 +47,18 @@ lights and congestion. So Anole takes the duration the routing service predicts
 and redistributes it across the path with a physical speed profile, calibrated by
 bisection. Speed genuinely varies along the route, and the arrival time is right.
 
+**It obeys the limit of each road.** The routing service returns a bare polyline
+with no road identity, so Anole matches the track against OpenStreetMap and
+recovers the limit of every stretch it crosses. A trip that leaves town for a
+motorway now accelerates when the road allows it instead of holding one average
+throughout, and no stretch is ever driven above what it permits. Only 17% of ways
+carry an explicit `maxspeed` in the samples this was tested against, so the road
+class fills the rest, with street lighting standing in for "this is a town".
+
+Speed limits are an improvement, never a requirement: no network, a slow server
+or an unsurveyed region simply leaves the trip running on the pace of the mode,
+exactly as it did before.
+
 The whole trip is precomputed into a time-indexed table before it starts. The
 emission loop only reads from it, so a slow write skips a point rather than
 drifting the entire journey — much like a real GPS dropout.

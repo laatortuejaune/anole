@@ -253,13 +253,6 @@ struct ContentView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    if model.tripState == .calculating {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("Calculating the route...").font(.callout)
-                        }
-                    }
-
                     if model.routeCandidates.count > 1 {
                         Picker("Route", selection: Binding(
                             get: { model.selectedRoute?.id ?? "" },
@@ -278,7 +271,19 @@ struct ContentView: View {
 
                     if let route = model.selectedRoute {
                         LabeledContent("Distance", value: route.distanceLabel)
-                        LabeledContent("Duration", value: route.targetDurationLabel)
+                        LabeledContent(
+                            "Duration",
+                            value: model.simulatedDurationLabel ?? route.targetDurationLabel
+                        )
+                        if let note = model.durationNote {
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let limits = model.speedLimitSummary {
+                            LabeledContent("Speed limits", value: limits)
+                        }
                         if let schedule = model.schedule {
                             LabeledContent(
                                 "Top speed",
@@ -489,7 +494,13 @@ struct ContentView: View {
 
             if model.tripState == .playing || model.tripState == .paused {
                 HStack {
-                    Text(String(format: "%.0f km/h", model.currentSpeed * 3.6))
+                    HStack(spacing: 5) {
+                        Text(String(format: "%.0f km/h", model.currentSpeed * 3.6))
+                        if let limit = model.currentSpeedLimit {
+                            Text(String(format: "/ %.0f", limit * 3.6))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer()
                     Text("\(format(model.remainingTime)) left")
                 }

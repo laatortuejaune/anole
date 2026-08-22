@@ -37,6 +37,8 @@ struct MapPane: View {
         .overlay(alignment: .bottomTrailing) { recenterButtons }
         .overlay(alignment: .bottomLeading) { statusHint }
         .overlay(alignment: .bottom) { pendingChoice }
+        .overlay(alignment: .bottom) { routePreparation }
+        .animation(.easeInOut(duration: 0.2), value: model.tripState)
         .onChange(of: model.selectedRoute?.id) { _, _ in
             // A freshly computed route should be visible without panning
             // around to find it.
@@ -179,6 +181,36 @@ struct MapPane: View {
         case .denied: return "Permission denied. Open Settings > Privacy."
         case .failed(let message): return message
         default: return "Show your real location"
+        }
+    }
+
+    /// Progress of the route preparation, in the place the buttons just left.
+    ///
+    /// It first lived in the route panel of the rail, which is precisely where
+    /// it could not be seen: a route is asked for from the map, and usually from
+    /// another page. Here it appears exactly where the "Go there" button was a
+    /// moment earlier - the eye is already on that spot.
+    @ViewBuilder
+    private var routePreparation: some View {
+        if model.tripState == .calculating, let phase = model.routePhase {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(phase.label).font(.callout)
+                    Spacer()
+                    Text("\(Int(model.routeProgress * 100))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                ProgressView(value: model.routeProgress)
+                    .animation(.easeOut(duration: 0.2), value: model.routeProgress)
+            }
+            .frame(width: 260)
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+            .padding(16)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 

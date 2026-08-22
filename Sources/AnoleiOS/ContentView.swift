@@ -248,6 +248,8 @@ struct iOSContentView: View {
         VStack(spacing: 10) {
             if let pending = model.pendingPoint {
                 pendingActions(pending)
+            } else if model.tripState == .calculating {
+                routePreparation
             } else if model.schedule != nil {
                 tripControls
             }
@@ -311,16 +313,48 @@ struct iOSContentView: View {
         }
     }
 
+    /// Shown while the route is being prepared.
+    ///
+    /// Without it the panel stays empty for several seconds, which reads as
+    /// nothing having happened - the reason this exists at all.
+    @ViewBuilder
+    private var routePreparation: some View {
+        if let phase = model.routePhase {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(phase.label).font(.caption)
+                    Spacer()
+                    Text("\(Int(model.routeProgress * 100))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                ProgressView(value: model.routeProgress)
+                    .animation(.easeOut(duration: 0.2), value: model.routeProgress)
+            }
+        }
+    }
+
     @ViewBuilder
     private var tripControls: some View {
         if let route = model.selectedRoute {
             VStack(spacing: 8) {
                 HStack {
-                    Text("\(route.distanceLabel) · \(route.targetDurationLabel)")
-                        .font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(route.distanceLabel) · \(model.simulatedDurationLabel ?? route.targetDurationLabel)")
+                        if let limits = model.speedLimitSummary {
+                            Text(limits).font(.caption2)
+                        }
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     if model.tripState == .playing {
-                        Text(String(format: "%.0f km/h", model.currentSpeed * 3.6))
+                        HStack(spacing: 5) {
+                            Text(String(format: "%.0f km/h", model.currentSpeed * 3.6))
+                            if let limit = model.currentSpeedLimit {
+                                Text(String(format: "/ %.0f", limit * 3.6))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                             .font(.caption.monospacedDigit())
                     }
                 }

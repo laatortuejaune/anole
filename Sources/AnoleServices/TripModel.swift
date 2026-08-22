@@ -93,9 +93,18 @@ public final class TripModel: ObservableObject {
     @Published public private(set) var routeCandidates: [RoutePlan] = []
     @Published public var selectedRoute: RoutePlan?
     @Published public private(set) var tripState: TripState = .idle
+    /// Step the route preparation has reached, nil when nothing is being prepared.
+    @Published public private(set) var routePhase: RoutePhase?
+    /// Overall progress of that preparation, 0 to 1.
+    @Published public private(set) var routeProgress: Double = 0
+    private var routeProgressTask: Task<Void, Never>?
     /// Progress along the trip, from 0 to 1.
     @Published public private(set) var tripProgress: Double = 0
     @Published public private(set) var currentSpeed: Double = 0
+    /// Why the speed limits could not be fetched, nil when they were.
+    @Published public private(set) var speedLimitFailure: String?
+    /// Limit of the road under the moving point, nil when unknown.
+    @Published public private(set) var currentSpeedLimit: Double?
     @Published public private(set) var remainingTime: TimeInterval = 0
     @Published public private(set) var schedule: TripSchedule?
     /// Last lines from the helper, to diagnose without leaving the app.
@@ -406,16 +415,125 @@ public final class TripModel: ObservableObject {
         schedule = nil
 
         do {
+            beginPhase(.routing)
             let plans = try await MapKitRouteProvider.routes(
                 from: start, to: end, mode: transportMode
             )
-            routeCandidates = plans
-            select(plans[0])
+            // Only driving reads limits; announcing the step for a walk would
+            // name something that never runs.
+            if transportMode == .driving { beginPhase(.speedLimits) }
+            let enriched = await Self.withSpeedLimits(plans)
+            speedLimitFailure = transportMode == .driving
+                ? await OverpassSpeedLimits.shared.lastFailure
+                : nil
+
+            beginPhase(.profile)
+            routeCandidates = enriched
+            select(enriched[0])
             tripState = .ready
+            endPhases()
         } catch {
+            endPhases()
             tripState = .idle
             report(error)
         }
+    }
+
+    /// Enters a preparation step and starts creeping the bar through it.
+    ///
+    /// The progress is an estimate and makes no secret of it: each tick closes a
+    /// fixed share of the distance left to the ceiling, so the bar slows as it
+    /// approaches and never pretends the step is finished. A step that returns
+    /// early simply jumps to the next one.
+    private func beginPhase(_ phase: RoutePhase) {
+        routePhase = phase
+        routeProgress = max(routeProgress, phase.startFraction)
+        routeProgressTask?.cancel()
+        routeProgressTask = Task { [weak self] in
+            let tick = 0.1
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(tick * 1_000_000_000))
+                guard let self, self.routePhase == phase, !Task.isCancelled else { return }
+                let remaining = phase.ceilingFraction - self.routeProgress
+                guard remaining > 0.0005 else { continue }
+                self.routeProgress += remaining * (tick / phase.expectedDuration)
+            }
+        }
+    }
+
+    private func endPhases() {
+        routeProgressTask?.cancel()
+        routeProgressTask = nil
+        routePhase = nil
+        routeProgress = 0
+    }
+
+    /// Attaches the OpenStreetMap speed limits to freshly computed routes.
+    ///
+    /// This runs before the route is offered, not after, because asking to go
+    /// somewhere starts the trip straight away: enriching in the background
+    /// would land after departure, when the schedule is already playing and
+    /// must not be rebuilt underneath it.
+    ///
+    /// A failure changes nothing. The routes come back exactly as they went in
+    /// and the trip runs on the pace of the mode, which is what it did before
+    /// speed limits existed at all.
+    static func withSpeedLimits(_ plans: [RoutePlan]) async -> [RoutePlan] {
+        guard plans.first?.mode == .driving else { return plans }
+
+        let segments = await OverpassSpeedLimits.shared.segments(
+            alongTracks: plans.map(\.coordinates)
+        )
+        guard !segments.isEmpty else { return plans }
+
+        return plans.map { plan in
+            guard let geometry = plan.geometry else { return plan }
+            var enriched = plan
+            enriched.speedSamples = SpeedLimitMatcher.samples(
+                geometry: geometry, segments: segments, mode: plan.mode
+            )
+            return enriched
+        }
+    }
+
+    /// Duration the trip will actually take, which is not always the one the
+    /// routing service announces.
+    public var simulatedDurationLabel: String? {
+        guard let schedule else { return nil }
+        let minutes = Int((schedule.duration / 60).rounded())
+        return minutes < 60 ? "\(minutes) min" : "\(minutes / 60)h \(minutes % 60)m"
+    }
+
+    /// Said out loud when the simulated duration departs from the announced one.
+    ///
+    /// Apple's estimate assumes the pace real traffic holds, which on some roads
+    /// means sitting on the limit or a little over. Anole never crosses it, and
+    /// it also stops at junctions and slows into bends. When those two cannot be
+    /// reconciled the trip is the slower of the two - and says so, rather than
+    /// displaying a duration it will not honour.
+    public var durationNote: String? {
+        guard let schedule, let route = selectedRoute else { return nil }
+        let target = route.targetDuration
+        guard target > 0 else { return nil }
+        let drift = (schedule.duration - target) / target
+        guard abs(drift) > 0.05 else { return nil }
+        let minutes = Int((target / 60).rounded())
+        return drift > 0
+            ? "Apple predicts \(minutes) min; the limits of these roads do not allow it"
+            : "Apple predicts \(minutes) min; these roads allow better"
+    }
+
+    /// What the route knows about its speed limits, for display.
+    ///
+    /// Stated plainly rather than hidden: a trip that silently falls back on the
+    /// pace of the mode looks exactly like one that failed, and there was no way
+    /// to tell them apart.
+    public var speedLimitSummary: String? {
+        guard let route = selectedRoute, route.mode == .driving else { return nil }
+        let count = route.speedSamples.count
+        if count > 0 { return "\(count) stretches from OpenStreetMap" }
+        if let reason = speedLimitFailure { return "Unavailable (\(reason)) — pace of the mode" }
+        return "No speed limits — pace of the mode"
     }
 
     /// Prepares the playback of a route: speed profile and schedule.
@@ -438,6 +556,7 @@ public final class TripModel: ObservableObject {
         schedule = TripSchedule.calibrated(
             geometry: geometry,
             mode: plan.mode,
+            samples: plan.speedSamples,
             stops: stops,
             minimumSpeed: settings.minimumSpeed,
             speedCeiling: settings.speedCeiling(for: plan.mode),
@@ -482,6 +601,7 @@ public final class TripModel: ObservableObject {
                 let fix = schedule.sample(at: self.tripElapsed)
                 self.currentCoordinate = fix.coordinate
                 self.currentSpeed = fix.speed
+                self.currentSpeedLimit = schedule.legalLimit(at: self.tripElapsed)
                 self.tripProgress = schedule.duration > 0
                     ? min(self.tripElapsed / schedule.duration, 1)
                     : 1

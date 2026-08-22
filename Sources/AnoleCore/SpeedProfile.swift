@@ -9,19 +9,29 @@ public struct SpeedSample: Sendable, Hashable {
     /// Legal limit, in m/s. Display and hard ceiling; often unknown.
     public var legalLimit: Double?
     public var roadName: String?
+    /// Exponent applied to the cruise scale over this stretch. 1 means the
+    /// stretch takes the calibration in full, as it did before road classes
+    /// existed.
+    public var scaleSensitivity: Double
+    /// Share of `legalLimit` the setpoint never goes under, 0 for none.
+    public var limitFidelity: Double
 
     public init(
         startArcLength: Double,
         endArcLength: Double,
         travelSpeed: Double,
         legalLimit: Double? = nil,
-        roadName: String? = nil
+        roadName: String? = nil,
+        scaleSensitivity: Double = 1,
+        limitFidelity: Double = 0
     ) {
         self.startArcLength = startArcLength
         self.endArcLength = endArcLength
         self.travelSpeed = travelSpeed
         self.legalLimit = legalLimit
         self.roadName = roadName
+        self.scaleSensitivity = max(scaleSensitivity, 0.05)
+        self.limitFidelity = min(max(limitFidelity, 0), 1)
     }
 }
 
@@ -50,7 +60,11 @@ public struct SpeedPlanner: Sendable {
     /// Reference speed at each node, before scaling.
     private let baseSpeed: [Double]
     /// Legal ceiling at each node, when it is known.
-    private let legalCeiling: [Double?]
+    public let legalCeiling: [Double?]
+    /// Exponent applied to the cruise scale at each node.
+    private let sensitivity: [Double]
+    /// Share of the limit the setpoint never drops below, at each node.
+    private let fidelity: [Double]
     private let stopAtNode: [Int: TimeInterval]
     public let nodeCount: Int
     /// Speed below which we do not want to drop once up to speed.
@@ -82,17 +96,23 @@ public struct SpeedPlanner: Sendable {
 
         var base = [Double](repeating: mode.defaultSpeed, count: grid.count)
         var legal = [Double?](repeating: nil, count: grid.count)
+        var sensitivity = [Double](repeating: 1, count: grid.count)
+        var fidelity = [Double](repeating: 0, count: grid.count)
         if !samples.isEmpty {
             for index in 0..<grid.count {
                 let distance = Double(index) * step
                 if let sample = samples.first(where: { distance >= $0.startArcLength && distance <= $0.endArcLength }) {
                     base[index] = sample.travelSpeed
                     legal[index] = sample.legalLimit
+                    sensitivity[index] = sample.scaleSensitivity
+                    fidelity[index] = sample.limitFidelity
                 }
             }
         }
         self.baseSpeed = base
         self.legalCeiling = legal
+        self.sensitivity = sensitivity
+        self.fidelity = fidelity
 
         var stopMap: [Int: TimeInterval] = [:]
         for stop in stops {
@@ -112,7 +132,19 @@ public struct SpeedPlanner: Sendable {
         var speeds = [Double](repeating: 0, count: nodeCount)
 
         for index in 0..<nodeCount {
-            var value = min(baseSpeed[index] * cruiseScale, speedCeiling)
+            // The exponent is what keeps a motorway near its limit while the
+            // town absorbs the delay. With no samples it is 1 everywhere, and
+            // this is a plain multiplication again.
+            var scaled = baseSpeed[index] * pow(cruiseScale, sensitivity[index])
+            // Fidelity floor: a clear motorway is driven at its limit, and the
+            // calibration is not allowed to argue. Raising a floor keeps the
+            // speed increasing with the scale, so the binary search still
+            // converges - it simply saturates sooner, and the trip then says it
+            // cannot be as slow as announced rather than crawling.
+            if let legal = legalCeiling[index], fidelity[index] > 0 {
+                scaled = max(scaled, legal * fidelity[index])
+            }
+            var value = min(scaled, speedCeiling)
             value = min(value, curvatureCeiling[index])
             if let legal = legalCeiling[index] { value = min(value, legal) }
             // The floor applies to the setpoint, not to the final result: the
