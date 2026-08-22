@@ -86,6 +86,22 @@ iOS forbids an app from reaching `127.0.0.1` to talk to its own system services,
 so LocalDevVPN provides a local virtual interface that works around it. Nothing
 leaves the device.
 
+## Installing the macOS app
+
+A built app is attached to each [release](../../releases). It is signed ad-hoc
+rather than notarised, so macOS blocks it on first launch — and right-clicking
+to open no longer works around that on macOS 15 and later.
+
+Open **System Settings → Privacy & Security**, scroll to the message saying
+Anole was blocked, and click **Open Anyway**. Or, in one command:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Anole.app
+```
+
+Then run `./Scripts/setup-backend.sh` once, from a checkout of this repository,
+to install the Python helper the app drives.
+
 ## Building
 
 ```bash
