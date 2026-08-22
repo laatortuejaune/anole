@@ -9,6 +9,10 @@ to test location-aware apps.
 
 Named after the lizard that blends into wherever it happens to be.
 
+![Anole on macOS](docs/screenshot-macos.png)
+
+*Driving from the Golden Gate Bridge to the Ferry Building.*
+
 ---
 
 ## What it does
