@@ -78,7 +78,13 @@ Both apps need **Developer Mode** enabled on the iPhone
 (Settings → Privacy & Security → Developer Mode).
 
 **macOS app** — macOS 15+, and a Python environment set up once by
-`Scripts/setup-backend.sh`. The iPhone connects over USB.
+`Scripts/setup-backend.sh`.
+
+The iPhone needs a cable **only for the first pairing**. After that it stays
+reachable over the local network, and Anole works with nothing plugged in —
+it shows which link it is using. Wi-Fi is convenient but less dependable: the
+link can drop when the phone locks or falls asleep, so plug it in for a long
+trip.
 
 **iOS app** — iOS 17+, an Apple Developer account (the free tier works), and
 [LocalDevVPN](https://apps.apple.com/app/id6755608044) from the App Store.

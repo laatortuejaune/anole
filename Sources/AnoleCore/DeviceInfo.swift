@@ -38,6 +38,19 @@ public struct DeviceInfo: Identifiable, Hashable, Sendable {
         return Int(first)
     }
 
+    /// How the device is reachable, in plain words.
+    public var connectionLabel: String {
+        switch connectionKind {
+        case .usb: return "USB"
+        case .network: return "Wi-Fi"
+        case .unknown: return "unknown"
+        }
+    }
+
+    /// Wi-Fi works, but the link can drop when the screen locks or the device
+    /// goes into deep sleep. Worth warning about before a long trip.
+    public var isWireless: Bool { connectionKind == .network }
+
     public var displayName: String {
         if let osVersion { return "\(name) - iOS \(osVersion)" }
         return name

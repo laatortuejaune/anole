@@ -165,6 +165,22 @@ struct ContentView: View {
                             .disabled(model.selectedDevice == nil || model.status.isBusy)
                     }
 
+                    if let device = model.selectedDevice {
+                        LabeledContent("Link") {
+                            HStack(spacing: 5) {
+                                Image(systemName: device.isWireless ? "wifi" : "cable.connector")
+                                    .foregroundStyle(device.isWireless ? Color.orange : Color.secondary)
+                                Text(device.connectionLabel)
+                            }
+                        }
+                        if device.isWireless {
+                            Text("Wi-Fi works, but the link can drop when the iPhone "
+                                 + "locks or sleeps. Plug it in for a long trip.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     statusRow
                     healthRow
 

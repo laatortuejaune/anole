@@ -70,6 +70,17 @@ Export it before generating the project, it is never committed:
 export DEVELOPMENT_TEAM=XXXXXXXXXX
 ```
 
+## USB or Wi-Fi
+
+`usbmuxd` is not only about USB despite its name: once a device has been paired
+and Wi-Fi sync is on, it stays reachable over the local network, and both the
+tunnel and the DTX channel work over it. `usbmux list` then returns the same
+device twice, once as `USB` and once as `Network`.
+
+`DeviceListing` merges the duplicate and prefers USB when both are available.
+The interface shows which link is in use, because a Wi-Fi drop mid-trip is
+otherwise indistinguishable from a bug.
+
 ## Constraints worth knowing
 
 - **Free developer account: the provisioning profile expires 7 days after
