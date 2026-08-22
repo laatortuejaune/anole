@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 import AnoleCore
 
 /// All the simulation logic, shared by both applications.
@@ -78,6 +79,15 @@ public final class TripModel: ObservableObject {
 
     /// Real location of the Mac. It serves as the default start of every route.
     public let realLocation = DeviceLocationProvider()
+    /// Relays its changes into ours.
+    ///
+    /// A nested ObservableObject publishes on its own; nothing observing this
+    /// model ever hears it. "My real location" moved the provider to `.ready`
+    /// and no view redrew — the map did not recentre, the blue dot stayed
+    /// away — until some unrelated publish happened to force a render. The
+    /// 5 Hz tick of a running trip hid it most of the time, which is what made
+    /// it look intermittent.
+    private var realLocationRelay: AnyCancellable?
 
     // MARK: GPX track
 
@@ -101,6 +111,22 @@ public final class TripModel: ObservableObject {
     /// Progress along the trip, from 0 to 1.
     @Published public private(set) var tripProgress: Double = 0
     @Published public private(set) var currentSpeed: Double = 0
+    /// Whether to fetch road speed limits from OpenStreetMap.
+    ///
+    /// It is a genuine trade-off, so it is offered rather than decided here.
+    /// Computing a route posts the boxes covering it to a public Overpass
+    /// instance, and since the default start is the real Core Location fix, the
+    /// first of those boxes contains where you actually are — sent outside
+    /// Apple's ecosystem, to a volunteer-run server, by an app whose point is
+    /// keeping that to yourself. Turning it off costs the speed limits and
+    /// nothing else: the trip runs on the pace of the mode, as it did before
+    /// they existed.
+    @Published public var fetchSpeedLimits: Bool = UserDefaults.standard.object(
+        forKey: "fetchSpeedLimits"
+    ) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(fetchSpeedLimits, forKey: "fetchSpeedLimits") }
+    }
+
     /// Why the speed limits could not be fetched, nil when they were.
     @Published public private(set) var speedLimitFailure: String?
     /// Limit of the road under the moving point, nil when unknown.
@@ -133,8 +159,20 @@ public final class TripModel: ObservableObject {
     // MARK: - Lifecycle
 
     /// The interface never queries the backend: it receives its state.
+    ///
+    /// Called once and only once. `backend.events` is a single AsyncStream
+    /// created at init: cancelling an iteration terminates it for good. Since
+    /// this runs from the `.task` of the content view, Cmd+N or closing and
+    /// reopening the window used to be enough to kill it — after which a lost
+    /// tunnel no longer stopped the trip, the health banner froze, and the trip
+    /// played on against a dead link.
     public func observeBackend() {
-        observationTask?.cancel()
+        guard observationTask == nil else { return }
+        if realLocationRelay == nil {
+            realLocationRelay = realLocation.objectWillChange.sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+        }
         let stream = backend.events
         observationTask = Task { [weak self] in
             for await event in stream {
@@ -270,6 +308,11 @@ public final class TripModel: ObservableObject {
         currentCoordinate = coordinate
         guard push else { return }
         Task { await pushCurrent() }
+        // The developer service holds nothing by itself: a coordinate pushed
+        // once is forgotten and the device finds its real position again within
+        // seconds. The keep-alive existed only after a trip arrived, so a plain
+        // teleport drifted away on its own.
+        startKeepAlive()
     }
 
     private func pushCurrent() async {
@@ -421,9 +464,10 @@ public final class TripModel: ObservableObject {
             )
             // Only driving reads limits; announcing the step for a walk would
             // name something that never runs.
-            if transportMode == .driving { beginPhase(.speedLimits) }
-            let enriched = await Self.withSpeedLimits(plans)
-            speedLimitFailure = transportMode == .driving
+            let wantsLimits = fetchSpeedLimits && transportMode == .driving
+            if wantsLimits { beginPhase(.speedLimits) }
+            let enriched = wantsLimits ? await Self.withSpeedLimits(plans) : plans
+            speedLimitFailure = wantsLimits
                 ? await OverpassSpeedLimits.shared.lastFailure
                 : nil
 
@@ -530,6 +574,7 @@ public final class TripModel: ObservableObject {
     /// to tell them apart.
     public var speedLimitSummary: String? {
         guard let route = selectedRoute, route.mode == .driving else { return nil }
+        guard fetchSpeedLimits else { return "Off — pace of the mode" }
         let count = route.speedSamples.count
         if count > 0 { return "\(count) stretches from OpenStreetMap" }
         if let reason = speedLimitFailure { return "Unavailable (\(reason)) — pace of the mode" }
@@ -653,6 +698,9 @@ public final class TripModel: ObservableObject {
         tripTask = nil
         tripState = .paused
         currentSpeed = 0
+        // Paused is still somewhere: without this the device drifted back to
+        // its real position while the interface showed the trip on hold.
+        startKeepAlive()
     }
 
     public func stopTrip() {
@@ -745,6 +793,37 @@ public final class TripModel: ObservableObject {
     private func stopKeepAlive() {
         keepAliveTask?.cancel()
         keepAliveTask = nil
+    }
+
+    // MARK: - Application lifecycle
+
+    /// Whether the trip was playing when the app left the foreground.
+    private var resumeWhenActive = false
+
+    /// The app is leaving the foreground.
+    ///
+    /// iOS suspends the process: nothing is emitted any more and the device
+    /// finds its real position again. That cannot be prevented without a
+    /// background mode, which a free developer account cannot have — but the
+    /// second half can. `ContinuousClock` keeps counting while suspended, so a
+    /// trip left running would come back having jumped forward by the whole
+    /// suspended interval. Pausing keeps the schedule honest.
+    public func applicationWillResignActive() {
+        resumeWhenActive = tripState == .playing
+        if resumeWhenActive { pauseTrip() }
+        stopKeepAlive()
+    }
+
+    /// The app is back in the foreground.
+    public func applicationDidBecomeActive() {
+        if resumeWhenActive {
+            resumeWhenActive = false
+            tripState = .paused
+            playTrip()
+        } else if currentCoordinate != nil, tripState != .playing {
+            // Whatever position was being held is very likely gone by now.
+            startKeepAlive()
+        }
     }
 
     public func stopEverything() async {

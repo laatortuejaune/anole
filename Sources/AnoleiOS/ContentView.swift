@@ -394,6 +394,15 @@ struct iOSContentView: View {
                         }
                     }
                 }
+                Section {
+                    Toggle("Read limits from OpenStreetMap", isOn: $model.fetchSpeedLimits)
+                } header: {
+                    Text("Speed limits")
+                } footer: {
+                    Text("Sends the area around the route — your real location included — "
+                         + "to a public Overpass server. Off, the trip runs on the pace of "
+                         + "the mode.")
+                }
                 Section("Real location") {
                     if let fix = model.realLocation.fix {
                         LabeledContent("Accuracy", value: "±\(Int(fix.accuracy)) m")

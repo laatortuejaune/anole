@@ -17,7 +17,7 @@ made it possible to port the project to the iPhone without touching the logic.
 |---|---|---|
 | `AnoleCore` | Geodesy, coordinate and URL parser, GPX, `PathGeometry`, `SpeedPlanner`, `TripSchedule`, `LocationBackend` protocol, error codes | both |
 | `AnoleServices` | `TripModel` (all the logic), place search, MapKit routes, real location | both |
-| `AnoleMac` | macOS interface (SwiftUI, `NavigationSplitView`) | macOS |
+| `AnoleMac` | macOS interface (SwiftUI, `HStack`) | macOS |
 | `AnoleiOS` | iPhone interface + `IDeviceBackend` | iOS |
 
 The `AnoleCore` files that drive subprocesses (`NDJSONChannel`,
@@ -54,6 +54,20 @@ xcrun devicectl device install app --device <UDID> <.app path>
 ```
 
 Find your device UDID with `xcrun devicectl list devices`.
+
+The app then needs a pairing file in its Documents container. Produce one with
+`pair_host` from [jkcoxson/idevice](https://github.com/jkcoxson/idevice), then:
+
+```bash
+xcrun devicectl device copy to --device <UDID> \
+  --domain-type appDataContainer \
+  --domain-identifier fr.laatortuejaune.anole \
+  --source pairing.plist \
+  --destination Documents/pairing.plist
+```
+
+The name matters: `IDeviceBackend` looks for `pairing.plist` in Documents and
+refuses to connect without it.
 
 Your Apple team ID is the **OU field** of your signing certificate, not the code
 in parentheses in its name — that one identifies the certificate itself. Read it
@@ -160,10 +174,26 @@ merges, *not* stops and turns, which the planner already models and would
 otherwise count twice. Bisection then scales the whole thing onto the announced
 duration, so the total stays exact while the distribution becomes right.
 
+Each stretch also carries a `limitFidelity`: a floor under the setpoint, so the
+calibration can no longer rub a motorway down to 84 for a posted 90. The floor
+sits on the setpoint alone — bends, junctions and braking still pass through it.
+Town classes get none; they are what absorbs the delay.
+
+Queries ask for rectangles rather than radii. A radius around each of a few
+hundred points was measured at 21 s on a 12 km trip against an 8 s timeout: it
+failed silently, every time. Rectangles are a single indexed lookup, about a
+second, and cutting the track into short zones instead of one box around the
+whole thing took the same roads from 4.2 MB to 1.1 MB. A refused request is
+retried once, a second and a half later: a public instance under load refuses
+outright and recovers moments after.
+
 Every failure is silent by design: `segments()` returns an empty array, the
-planner falls back on the pace of the mode, and the trip leaves regardless.
-Overpass runs on donated hardware, hence the 300-probe ceiling, the cache and
-the identifying user agent.
+planner falls back on the pace of the mode, and the trip leaves regardless — but
+it says so, since a silent fallback is indistinguishable from a failure and that
+is exactly what made a wrong speed impossible to diagnose. Overpass runs on
+donated hardware, hence the 24-zone ceiling, the cache and the identifying user
+agent. It is also the one thing here that leaves the machine, so it is a toggle:
+the first zone of a route necessarily contains the real starting position.
 
 ## Error codes
 

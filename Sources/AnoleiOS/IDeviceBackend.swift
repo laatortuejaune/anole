@@ -164,10 +164,14 @@ actor IDeviceBackend: LocationBackend {
         adapter: OpaquePointer?,
         handshake: OpaquePointer?
     ) throws {
+        // Nothing in this whole step announces a lost link: `prepare()` catches
+        // what it throws on purpose, because the image is usually mounted
+        // already — iOS 27 supplies it through a system cryptex.
         var mounter: OpaquePointer?
         try check(
             image_mounter_connect_rsd(adapter, handshake, &mounter),
-            "connecting to the image mounter"
+            "connecting to the image mounter",
+            reportsHealth: false
         )
         defer { if let mounter { image_mounter_free(mounter) } }
 
@@ -222,7 +226,8 @@ actor IDeviceBackend: LocationBackend {
                             mountProgressCallback,
                             nil
                         ),
-                        "mounting the developer disk image"
+                        "mounting the developer disk image",
+                        reportsHealth: false
                     )
                 }
             }
@@ -289,19 +294,30 @@ actor IDeviceBackend: LocationBackend {
         if let near = settlingNear {
             // Setting a point close to the real one before stopping speeds up
             // the reacquisition of the real signal.
-            try? check(location_simulation_set(simulation, near.latitude, near.longitude), "")
+            try? check(
+                location_simulation_set(simulation, near.latitude, near.longitude),
+                "", reportsHealth: false
+            )
             try? await Task.sleep(nanoseconds: 400_000_000)
         }
         try check(location_simulation_clear(simulation), "returning to the real location")
     }
 
     func shutdown() async {
+        // Every one of these is owned: the library hands over a pointer built
+        // from Box::into_raw, and nil-ing the Swift variable frees nothing.
+        // Without the last two, each disconnect/reconnect cycle leaked the
+        // tunnel state and left the previous TCP connection open.
+        // Order matters: the simulation and the server sit on top of the
+        // handshake, which sits on the adapter.
         if let simulation { location_simulation_free(simulation) }
         if let server { remote_server_free(server) }
+        if let handshake { rsd_handshake_free(handshake) }
+        if let adapter { adapter_free(adapter) }
         simulation = nil
         server = nil
-        adapter = nil
         handshake = nil
+        adapter = nil
         eventSink.yield(.health(.idle))
     }
 
@@ -310,14 +326,27 @@ actor IDeviceBackend: LocationBackend {
     /// Turns a library error code into a Swift error.
     ///
     /// The caller has to free the error, otherwise it leaks on every failure.
-    private func check(_ error: UnsafeMutablePointer<IdeviceFfiError>?, _ what: String) throws {
+    ///
+    /// `reportsHealth` exists because announcing a lost link is not free: the
+    /// interface answers every `.lost` by stopping the trip and showing a
+    /// failure. Steps the backend itself treats as survivable — the settle-set
+    /// swallowed by `try?`, the mount that `prepare()` catches on purpose —
+    /// were making a healthy connection read as broken, with a malformed
+    /// "Link lost: : …" for good measure.
+    private func check(
+        _ error: UnsafeMutablePointer<IdeviceFfiError>?,
+        _ what: String,
+        reportsHealth: Bool = true
+    ) throws {
         guard let error else { return }
         let code = error.pointee.code
         let message = error.pointee.message.map { String(cString: $0) } ?? "error \(code)"
         idevice_error_free(error)
 
-        eventSink.yield(.health(.lost("\(what): \(message)")))
-        throw BackendError.tunnelFailed("\(what) — \(message)")
+        if reportsHealth, !what.isEmpty {
+            eventSink.yield(.health(.lost("\(what): \(message)")))
+        }
+        throw BackendError.tunnelFailed(what.isEmpty ? message : "\(what) — \(message)")
     }
 }
 

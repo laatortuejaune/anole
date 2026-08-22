@@ -6,6 +6,8 @@ import AnoleServices
 struct ContentView: View {
     @EnvironmentObject private var model: TripModel
     @State private var panel: Panel? = .device
+    /// Built when the exporter opens, not on every render.
+    @State private var exportDocument = GPXFile(contents: "")
 
     /// The panels the sidebar can show, one at a time.
     ///
@@ -61,9 +63,19 @@ struct ContentView: View {
         ) { result in
             if case .success(let url) = result { model.loadGPX(from: url) }
         }
+        .onChange(of: model.presentGPXExporter) { _, presented in
+            exportDocument = presented
+                ? GPXFile(contents: GPXDocument.write(model.recordedTrack, name: "Anole"))
+                : GPXFile(contents: "")
+        }
         .fileExporter(
             isPresented: $model.presentGPXExporter,
-            document: GPXFile(contents: GPXDocument.write(model.recordedTrack, name: "Anole")),
+            // Serialised once, when the exporter opens. `document:` is a value
+            // parameter, so it used to be rebuilt on every body evaluation —
+            // five times a second while a trip plays, each one walking tens of
+            // thousands of points through an ISO8601 formatter on the main
+            // actor, alongside the simulation itself.
+            document: exportDocument,
             contentType: UTType(filenameExtension: "gpx") ?? .xml,
             defaultFilename: "trip"
         ) { result in
@@ -284,6 +296,13 @@ struct ContentView: View {
                         if let limits = model.speedLimitSummary {
                             LabeledContent("Speed limits", value: limits)
                         }
+                        Toggle("Read limits from OpenStreetMap", isOn: $model.fetchSpeedLimits)
+                            .font(.caption)
+                        Text("Sends the area around the route — your real location included "
+                             + "— to a public Overpass server.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         if let schedule = model.schedule {
                             LabeledContent(
                                 "Top speed",

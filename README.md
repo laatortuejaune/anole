@@ -157,6 +157,13 @@ copy it over with `devicectl`. See `ARCHITECTURE.md` for the full procedure.
   launching; rebuild and reinstall. A paid account extends this to a year.
 - **The iOS app cannot be distributed through the App Store.** Apps that drive
   developer services are not eligible. Sideloading only.
+- **The iOS app only works in the foreground.** Driving developer services
+  needs a background mode Apple does not grant to free accounts, so iOS
+  suspends the app as soon as you switch away — and the device finds its real
+  position again within seconds. A trip is paused when the app leaves the
+  foreground and resumed where it stood, rather than jumping forward by however
+  long you were elsewhere, but there is no way around the gap itself. The macOS
+  app has no such limit: it drives the phone from outside, screen locked.
 - **A computer is required for the first install** and for producing the pairing
   file. After that, the iOS app runs entirely on its own — no Wi-Fi, no tether.
 - Apps can detect simulated location through
@@ -173,7 +180,11 @@ copy it over with `devicectl`. See `ARCHITECTURE.md` for the full procedure.
 Anole exists to test location-aware software: checking that a delivery app
 behaves at the customer's door, that a geofence fires where it should, that a
 route renders correctly. It is also a way to keep your real whereabouts to
-yourself.
+yourself — with one caveat worth stating plainly: reading road speed limits
+means posting the area around your route to a public OpenStreetMap server, and
+since a trip starts from where you actually are, that area contains your real
+position. It is a toggle in the route panel, off costs you the limits and
+nothing else.
 
 It is not built to defeat anti-cheat systems, and using it against a service's
 terms of use is your responsibility, not the project's.
