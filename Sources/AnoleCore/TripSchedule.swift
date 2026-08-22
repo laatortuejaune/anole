@@ -61,6 +61,17 @@ public struct TripSchedule: Sendable {
     /// invisible, and was the reason a wrong speed could not be diagnosed.
     public var hasSpeedLimits: Bool { limits.contains { $0 != nil } }
 
+    /// Instant at which the trip has covered `distance`.
+    ///
+    /// The inverse of `sample`, needed when the schedule is rebuilt under a trip
+    /// already under way: the moving point has to resume where it stands, not
+    /// where it set off.
+    public func elapsed(atDistance distance: Double) -> TimeInterval {
+        guard distance > 0, step > 0, !arrival.isEmpty else { return 0 }
+        let index = min(max(Int(distance / step), 0), arrival.count - 1)
+        return arrival[index]
+    }
+
     /// Legal limit under the moving point, in m/s.
     public func legalLimit(at elapsed: TimeInterval) -> Double? {
         guard duration > 0, !limits.isEmpty else { return nil }
@@ -107,7 +118,12 @@ public struct TripSchedule: Sendable {
     }
 
     private func fix(atNode index: Int, extraDistance: Double, speed: Double) -> RouteFix {
-        let distance = min(Double(index) * step + extraDistance, geometry.length)
+        // `resample` puts the last node at the end of the track so the whole of
+        // it is covered, not at (N-1)·step. Deriving it from the step left a
+        // couple of centimetres unwalked for ever whenever the length was not a
+        // multiple of the step, and `isFinished` then never became true.
+        let base = index >= arrival.count - 1 ? geometry.length : Double(index) * step
+        let distance = min(base + extraDistance, geometry.length)
         return RouteFix(
             coordinate: geometry.point(at: distance),
             course: geometry.course(at: distance),

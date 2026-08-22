@@ -26,6 +26,7 @@ public actor PyMobileDevice3Backend: LocationBackend {
     private var channel: NDJSONChannel?
     private var device: DeviceInfo?
     private var relayTask: Task<Void, Never>?
+    private var logRelayTask: Task<Void, Never>?
 
     public init(paths: Paths = .default) {
         self.paths = paths
@@ -177,34 +178,65 @@ public actor PyMobileDevice3Backend: LocationBackend {
         self.channel = channel
         try await channel.start()
 
-        relayTask = Task { [weak self] in
-            await self?.relayEvents(from: channel)
+        // Only the log relay starts now. Two tasks iterating the same
+        // AsyncStream share it: whichever asks first takes the message, so the
+        // "ready" - or worse, the "error" explaining why the tunnel failed -
+        // landed in the relay while `prepare()` waited for something that had
+        // already been delivered elsewhere. The event relay therefore starts
+        // once the handshake is over, and until then `waitForReady` reads the
+        // stream alone.
+        logRelayTask = Task { [weak self] in
+            await self?.relayLogs(from: channel)
         }
 
         // The helper announces "ready" once the tunnel and the channel are open.
         try await waitForReady(on: channel)
+
+        relayTask = Task { [weak self] in
+            await self?.relayEvents(from: channel)
+        }
     }
 
+    /// Waits for the helper to announce itself, or gives up out loud.
+    ///
+    /// The deadline is raced against the read rather than checked inside it: a
+    /// test at the bottom of `for await` only runs when a message arrives, so a
+    /// helper that was alive but silent - a tunnel stuck mid-handshake - was
+    /// never timed out at all. `NDJSONChannel.request` already does it this way.
     private func waitForReady(on channel: NDJSONChannel, timeout: TimeInterval = 90) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-        for await message in channel.events {
-            if message.event == "ready" { return }
-            if message.event == "error" {
-                throw BackendError.tunnelFailed(message.text ?? message.code ?? "unknown error")
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for await message in channel.events {
+                    if message.event == "ready" { return }
+                    if message.event == "error" {
+                        throw BackendError.tunnelFailed(message.text ?? message.code ?? "unknown error")
+                    }
+                }
+                // The stream ended: the helper died before saying anything.
+                throw BackendError.tunnelFailed("The helper stopped before the tunnel was open.")
             }
-            if Date() > deadline { break }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                throw BackendError.tunnelFailed("No reply from the helper within the time limit.")
+            }
+            defer { group.cancelAll() }
+            try await group.next()
         }
-        throw BackendError.tunnelFailed("No reply from the helper within the time limit.")
+    }
+
+    /// Helper logs, relayed from the moment the process starts.
+    ///
+    /// Kept apart from the events so it can run during the handshake: a tunnel
+    /// that fails explains itself on stderr, and that is exactly when the user
+    /// needs to see it.
+    private func relayLogs(from channel: NDJSONChannel) async {
+        for await line in channel.logs {
+            eventSink.yield(.log(line))
+        }
     }
 
     /// Translates helper messages into states for the interface.
     private func relayEvents(from channel: NDJSONChannel) async {
-        async let logRelay: Void = {
-            for await line in channel.logs {
-                eventSink.yield(.log(line))
-            }
-        }()
-
         for await message in channel.events {
             switch message.event {
             case "health":
@@ -224,7 +256,6 @@ public actor PyMobileDevice3Backend: LocationBackend {
                 break
             }
         }
-        await logRelay
     }
 
     // MARK: - Locations
@@ -266,6 +297,8 @@ public actor PyMobileDevice3Backend: LocationBackend {
     private func stopHelper() async {
         relayTask?.cancel()
         relayTask = nil
+        logRelayTask?.cancel()
+        logRelayTask = nil
         if let channel { await channel.stop() }
         channel = nil
     }

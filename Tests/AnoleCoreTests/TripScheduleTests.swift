@@ -202,4 +202,25 @@ struct TripScheduleTests {
         let driving = TripSchedule.calibrated(geometry: geometry, mode: .driving, targetDuration: nil)
         #expect(walking.duration > driving.duration * 3)
     }
+
+    /// Needed when the schedule is rebuilt under a running trip: without it the
+    /// moving point went back to the start of the route.
+    @Test("Elapsed time can be recovered from the distance covered")
+    func elapsedFromDistance() {
+        let schedule = TripSchedule.calibrated(
+            geometry: straight(3000), mode: .driving, targetDuration: 300
+        )
+        #expect(schedule.elapsed(atDistance: 0) == 0)
+        #expect(schedule.elapsed(atDistance: -5) == 0)
+
+        // Round trip: a time, its distance, and back to the same time.
+        for fraction in [0.25, 0.5, 0.75] {
+            let time = schedule.duration * fraction
+            let distance = schedule.sample(at: time).distanceTravelled
+            let recovered = schedule.elapsed(atDistance: distance)
+            #expect(abs(recovered - time) < 2)
+        }
+        // Past the end it saturates rather than running off.
+        #expect(schedule.elapsed(atDistance: 99_999) <= schedule.duration + 0.01)
+    }
 }

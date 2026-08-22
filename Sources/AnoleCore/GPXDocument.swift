@@ -76,6 +76,15 @@ public enum GPXDocument {
         return GPXTrack(name: delegate.trackName, points: delegate.points)
     }
 
+    /// XML entities, so that a name carrying `&` or `<` does not produce a file
+    /// this very module then refuses to read back.
+    private static func escaped(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
     public static func write(_ points: [TrackPoint], name: String = "Anole") -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
@@ -84,7 +93,7 @@ public enum GPXDocument {
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="Anole" xmlns="http://www.topografix.com/GPX/1/1">
           <trk>
-            <name>\(name)</name>
+            <name>\(escaped(name))</name>
             <trkseg>
 
         """

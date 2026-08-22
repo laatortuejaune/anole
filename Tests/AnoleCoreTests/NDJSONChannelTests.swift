@@ -32,6 +32,53 @@ struct NDJSONChannelTests {
         #expect(!(await channel.isRunning))
     }
 
+    /// A helper that dies before saying anything used to leave every reader
+    /// suspended for good: `prepare()` neither returned nor threw, and the
+    /// interface stayed on "Opening tunnel" until the app was quit.
+    @Test("A helper that dies takes the event stream down with it")
+    func streamEndsWhenHelperDies() async throws {
+        let script = try Self.fakeHelper("""
+        echo 'about to fail' >&2
+        exit 3
+        """)
+        defer { try? FileManager.default.removeItem(at: script) }
+
+        let channel = NDJSONChannel(executable: script, arguments: [])
+        try await channel.start()
+
+        // Without the finish() in cleanUp this loop never ends, and the test
+        // times out instead of failing.
+        #expect(await Self.drains(channel.events))
+    }
+
+    @Test("The log stream ends too, so nothing waits on it either")
+    func logStreamEndsWhenHelperDies() async throws {
+        let script = try Self.fakeHelper("exit 1")
+        defer { try? FileManager.default.removeItem(at: script) }
+
+        let channel = NDJSONChannel(executable: script, arguments: [])
+        try await channel.start()
+
+        #expect(await Self.drains(channel.logs))
+    }
+
+    /// True when the stream finishes on its own within a few seconds.
+    static func drains<T: Sendable>(_ stream: AsyncStream<T>) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await _ in stream {}
+                return true
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+    }
+
     @Test("Stopping twice in a row has no effect")
     func doubleStop() async throws {
         let script = try Self.fakeHelper("while true; do sleep 1; done")

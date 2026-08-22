@@ -123,4 +123,20 @@ struct GPXTests {
         let averageDense = dense.geometry.length / dense.duration
         #expect(abs(averageDense - TransportMode.walking.defaultSpeed) < 0.3)
     }
+
+    /// The writer used to emit a file its own parser rejects.
+    @Test("A name carrying XML characters survives a round trip")
+    func escapesNameForXML() throws {
+        let points = [
+            TrackPoint(coordinate: Coordinate(latitude: 37.7793, longitude: -122.4193), timestamp: Date()),
+            TrackPoint(coordinate: Coordinate(latitude: 37.7800, longitude: -122.4180), timestamp: Date()),
+        ]
+        let xml = GPXDocument.write(points, name: "Rides & <trips>")
+        #expect(xml.contains("&amp;"))
+        #expect(xml.contains("&lt;trips&gt;"))
+
+        // And the parser takes it straight back.
+        let track = try GPXDocument.parse(Data(xml.utf8))
+        #expect(track.points.count == 2)
+    }
 }

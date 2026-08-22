@@ -248,4 +248,22 @@ struct AngularDifferenceTests {
         #expect(angularDifference(45, 135) == 90)
         #expect(angularDifference(315, 45) == 90)
     }
+
+    /// Rounding pushes `a` above 1 for near-antipodal pairs and sqrt(1-a) goes
+    /// NaN — which then spreads silently: the duplicate filter lets the point
+    /// through, the track length becomes NaN, and the trip never ends.
+    @Test("Near-antipodal points give a real distance, never NaN")
+    func antipodalDistance() {
+        let pairs: [(Coordinate, Coordinate)] = [
+            (Coordinate(latitude: 0, longitude: 0), Coordinate(latitude: 0, longitude: 180)),
+            (Coordinate(latitude: 45, longitude: 0), Coordinate(latitude: -45, longitude: 180)),
+            (Coordinate(latitude: 90, longitude: 0), Coordinate(latitude: -90, longitude: 0)),
+            (Coordinate(latitude: 1e-9, longitude: 0), Coordinate(latitude: -1e-9, longitude: 180)),
+        ]
+        for (a, b) in pairs {
+            let d = a.distance(to: b)
+            #expect(!d.isNaN)
+            #expect(d > 19_000_000 && d < 21_000_000)
+        }
+    }
 }

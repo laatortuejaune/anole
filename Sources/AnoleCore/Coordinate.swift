@@ -35,8 +35,15 @@ extension Coordinate {
         let dPhi = (other.latitude - latitude) * .pi / 180
         let dLambda = (other.longitude - longitude) * .pi / 180
 
-        let a = sin(dPhi / 2) * sin(dPhi / 2)
-            + cos(phi1) * cos(phi2) * sin(dLambda / 2) * sin(dLambda / 2)
+        // Rounding can push `a` an ulp above 1 for near-antipodal pairs, and
+        // sqrt(1 - a) is then NaN. The NaN spreads without ever raising: the
+        // duplicate filter lets the point through (NaN < 0.01 is false), the
+        // track length becomes NaN, and a trip built on it never finishes.
+        let a = min(
+            sin(dPhi / 2) * sin(dPhi / 2)
+                + cos(phi1) * cos(phi2) * sin(dLambda / 2) * sin(dLambda / 2),
+            1
+        )
         return 2 * earthRadiusMeters * atan2(sqrt(a), sqrt(1 - a))
     }
 

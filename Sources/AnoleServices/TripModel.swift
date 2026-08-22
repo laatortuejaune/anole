@@ -538,6 +538,23 @@ public final class TripModel: ObservableObject {
 
     /// Prepares the playback of a route: speed profile and schedule.
     public func select(_ plan: RoutePlan) {
+        // Rebuilding the schedule under a running trip used to reset the clock
+        // to zero while the task went on playing the previous one: touching the
+        // speed toggle ten minutes in sent the iPhone back to the start of the
+        // route. Nothing in the interface prevented it, and `speedSettings`
+        // calls straight in here on every change. So the ground already covered
+        // is measured first, and given back afterwards.
+        let sameRoute = selectedRoute?.id == plan.id
+        let running = tripState == .playing || tripState == .paused
+        let wasPlaying = tripState == .playing
+        let coveredDistance = (sameRoute && running)
+            ? schedule?.sample(at: tripElapsed).distanceTravelled
+            : nil
+        if coveredDistance != nil {
+            tripTask?.cancel()
+            tripTask = nil
+        }
+
         selectedRoute = plan
         guard let geometry = plan.geometry else { return }
 
@@ -562,10 +579,24 @@ public final class TripModel: ObservableObject {
             speedCeiling: settings.speedCeiling(for: plan.mode),
             targetDuration: target
         )
-        tripElapsed = 0
-        tripProgress = 0
-        remainingTime = schedule?.duration ?? 0
-        if let first = schedule?.sample(at: 0) { currentCoordinate = first.coordinate }
+        if let distance = coveredDistance, let schedule {
+            tripElapsed = schedule.elapsed(atDistance: distance)
+            tripProgress = schedule.duration > 0 ? min(tripElapsed / schedule.duration, 1) : 0
+            remainingTime = max(schedule.duration - tripElapsed, 0)
+            currentCoordinate = schedule.sample(at: tripElapsed).coordinate
+            // The task was cancelled above; restart it on the new schedule.
+            if wasPlaying {
+                tripState = .ready
+                playTrip()
+            } else {
+                tripState = .paused
+            }
+        } else {
+            tripElapsed = 0
+            tripProgress = 0
+            remainingTime = schedule?.duration ?? 0
+            if let first = schedule?.sample(at: 0) { currentCoordinate = first.coordinate }
+        }
     }
 
     public func playTrip() {

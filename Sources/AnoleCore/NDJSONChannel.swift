@@ -231,6 +231,16 @@ public actor NDJSONChannel {
         process = nil
         inputPipe = nil
         buffer.removeAll()
+
+        // Whoever is iterating these has to learn that nothing more is coming.
+        // Without it, a helper that dies before announcing itself - unplugged
+        // cable, Python traceback - left `for await` suspended forever: the
+        // caller neither returned nor threw, and the interface sat on "Opening
+        // tunnel" until it was quit.
+        eventContinuation?.finish()
+        logContinuation?.finish()
+        eventContinuation = nil
+        logContinuation = nil
     }
 }
 
