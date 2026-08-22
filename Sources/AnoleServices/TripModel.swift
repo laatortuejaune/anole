@@ -732,8 +732,12 @@ public final class TripModel: ObservableObject {
         gpxTrack = nil
         recordedTrack = []
         isRecording = false
-        speedSettings = .automatic
+        // The route goes first: `speedSettings` has a didSet that calls
+        // `select()`, which rebuilds a schedule and puts a coordinate back where
+        // one has just been cleared. Resetting used to resurrect the very
+        // position it was meant to drop.
         clearRouteKeepingPosition()
+        speedSettings = .automatic
         lastError = nil
     }
 

@@ -54,7 +54,13 @@ public enum ProcessRunner {
 
         let watchdog = Task {
             try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-            if process.isRunning { process.terminate() }
+            guard process.isRunning else { return }
+            process.terminate()
+            // SIGTERM is a request. A child that ignores it - or a grandchild
+            // still holding the pipe open - would keep the read alive well past
+            // the deadline this watchdog exists to enforce.
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
         }
 
         let out = await outData

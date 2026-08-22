@@ -148,39 +148,49 @@ async def serve(udid):
                     op = command.get("op")
                     seq = command.get("seq")
 
-                    if op == "ping":
-                        emit(ev="ok", seq=seq)
-
-                    elif op == "set":
-                        session.queue(command["lat"], command["lon"], seq)
-
-                    elif op == "clear":
-                        near = command.get("near")
-                        try:
-                            # Posting a point near the real one first speeds up
-                            # reacquisition: otherwise the device stays stuck on
-                            # the last simulated location for a long while.
-                            if near:
-                                await session.location.set(near["lat"], near["lon"])
-                                await asyncio.sleep(0.4)
-                            await session.location.clear()
-                            session.last_sent = None
+                    # One malformed command must not take the session with it.
+                    # A "set" without lat/lon raised KeyError, which unwound
+                    # every context manager on the way out - the tunnel included
+                    # - and left the device simulated with nothing able to talk
+                    # to it any more.
+                    try:
+                        if op == "ping":
                             emit(ev="ok", seq=seq)
-                        except Exception as exc:
-                            emit(ev="error", seq=seq, code="clear_failed", msg=str(exc))
 
-                    elif op == "bench":
-                        try:
-                            emit(ev="bench", seq=seq, **await session.measure(command.get("n", 30)))
-                        except Exception as exc:
-                            emit(ev="error", seq=seq, code="bench_failed", msg=str(exc))
+                        elif op == "set":
+                            session.queue(command["lat"], command["lon"], seq)
 
-                    elif op == "quit":
-                        emit(ev="ok", seq=seq)
-                        break
+                        elif op == "clear":
+                            near = command.get("near")
+                            try:
+                                # Posting a point near the real one first speeds
+                                # up reacquisition: otherwise the device stays
+                                # stuck on the last simulated location for a
+                                # long while.
+                                if near:
+                                    await session.location.set(near["lat"], near["lon"])
+                                    await asyncio.sleep(0.4)
+                                await session.location.clear()
+                                session.last_sent = None
+                                emit(ev="ok", seq=seq)
+                            except Exception as exc:
+                                emit(ev="error", seq=seq, code="clear_failed", msg=str(exc))
 
-                    else:
-                        emit(ev="error", seq=seq, code="unknown_op", msg=str(op))
+                        elif op == "bench":
+                            try:
+                                emit(ev="bench", seq=seq, **await session.measure(command.get("n", 30)))
+                            except Exception as exc:
+                                emit(ev="error", seq=seq, code="bench_failed", msg=str(exc))
+
+                        elif op == "quit":
+                            emit(ev="ok", seq=seq)
+                            break
+
+                        else:
+                            emit(ev="error", seq=seq, code="unknown_op", msg=str(op))
+
+                    except Exception as exc:
+                        emit(ev="error", seq=seq, code="bad_command", msg=str(exc))
 
                     if session.stopping.is_set():
                         break

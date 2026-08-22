@@ -126,8 +126,12 @@ public actor PyMobileDevice3Backend: LocationBackend {
 
         // Developer mode can only be enabled from the device itself.
         step(.discoveringDevice)
-        let modeResult = try await runTool(["amfi", "developer-mode-status"], timeout: 20)
-        if modeResult.combined.contains("false") {
+        let modeResult = try await runTool(targeted(["amfi", "developer-mode-status"]), timeout: 20)
+        // Only a run that succeeded says anything. A failed one leaves the
+        // state unknown, and finding "false" somewhere in an error message
+        // would report developer mode as off when it may well be on - while
+        // the mount just below fails with a clear message if it truly is.
+        if modeResult.succeeded, modeResult.standardOutput.lowercased().contains("false") {
             throw BackendError.developerModeDisabled
         }
 
@@ -142,15 +146,25 @@ public actor PyMobileDevice3Backend: LocationBackend {
         step(.ready)
     }
 
+    /// Adds `--udid` when a device is selected.
+    ///
+    /// Without it these checks answer for whichever device the tool happens to
+    /// pick, which is the wrong one as soon as two iPhones are plugged in - and
+    /// the helper below was already being told which one to use.
+    private func targeted(_ arguments: [String]) -> [String] {
+        guard let udid = device?.udid else { return arguments }
+        return arguments + ["--udid", udid]
+    }
+
     private func ensureDeveloperImageMounted() async throws {
-        let listed = try await runTool(["mounter", "list"], timeout: 30)
+        let listed = try await runTool(targeted(["mounter", "list"]), timeout: 30)
         if listed.succeeded, listed.standardOutput.contains("\"IsMounted\": true") {
             return
         }
 
         // Mounting requires Internet access: the image is signed by Apple's
         // servers for this precise device.
-        let mounted = try await runTool(["mounter", "auto-mount"], timeout: 300)
+        let mounted = try await runTool(targeted(["mounter", "auto-mount"]), timeout: 300)
         guard mounted.succeeded else {
             throw BackendError.developerImageUnavailable(mounted.combined)
         }

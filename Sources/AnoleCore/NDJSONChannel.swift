@@ -151,13 +151,17 @@ public actor NDJSONChannel {
         try inputPipe.fileHandleForWriting.write(contentsOf: line)
     }
 
-    public func stop() {
+    public func stop() async {
         guard let process else { return }
         if process.isRunning {
             // Give a clean shutdown a chance: the helper has to release the
-            // channel and the tunnel before it dies.
+            // channel and the tunnel before it dies. This used to call
+            // terminate() on the very next line, so the exit path the helper
+            // implements never once ran - and anoled.py installs no SIGTERM
+            // handler to fall back on.
             try? send(Helper.Command.quit)
-            process.terminate()
+            await waitForExit(within: 1.5)
+            if process.isRunning { process.terminate() }
         }
         // NEVER read terminationStatus here. terminate() is asynchronous: the
         // process is still alive at this point, and asking for its exit code
@@ -165,6 +169,14 @@ public actor NDJSONChannel {
         // brings the application down. The real exit code arrives through
         // terminationHandler anyway.
         cleanUp(code: 0)
+    }
+
+    /// Polls until the process is gone, or the deadline passes.
+    private func waitForExit(within seconds: TimeInterval) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while process?.isRunning == true, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
     }
 
     // MARK: - Internal
