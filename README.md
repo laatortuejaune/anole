@@ -157,13 +157,16 @@ copy it over with `devicectl`. See `ARCHITECTURE.md` for the full procedure.
   launching; rebuild and reinstall. A paid account extends this to a year.
 - **The iOS app cannot be distributed through the App Store.** Apps that drive
   developer services are not eligible. Sideloading only.
-- **The iOS app only works in the foreground.** Driving developer services
-  needs a background mode Apple does not grant to free accounts, so iOS
-  suspends the app as soon as you switch away — and the device finds its real
-  position again within seconds. A trip is paused when the app leaves the
-  foreground and resumed where it stood, rather than jumping forward by however
-  long you were elsewhere, but there is no way around the gap itself. The macOS
-  app has no such limit: it drives the phone from outside, screen locked.
+- **The iOS app needs "Always" location access to survive being switched away
+  from.** iOS suspends an app the moment it leaves the foreground, and a
+  suspended app pushes nothing: the device finds its real position again within
+  seconds — precisely when it matters, since the app you meant to fool is the
+  one you just opened. Anole declares the location background mode and keeps a
+  location stream running, which is what earns the process the right to stay
+  awake. That needs the "Always" permission and costs battery while a position
+  is being held, so it only runs while one is. Without that permission it falls
+  back on pausing the trip and resuming it where it stood. The macOS app has no
+  such constraint: it drives the phone from outside, screen locked.
 - **A computer is required for the first install** and for producing the pairing
   file. After that, the iOS app runs entirely on its own — no Wi-Fi, no tether.
 - Apps can detect simulated location through

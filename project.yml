@@ -77,6 +77,14 @@ targets:
           UIInterfaceOrientationLandscapeLeft
           UIInterfaceOrientationLandscapeRight
         # Without these descriptions, iOS silently denies the request.
+        # Xcode has no generated setting for UIBackgroundModes, so that one key
+        # lives in a file of its own and gets merged in. Everything else here
+        # stays an INFOPLIST_KEY_.
+        INFOPLIST_FILE: Resources/AnoleiOS-Info.plist
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: >-
+          Anole keeps its connection to the device alive while you are in
+          another app, so the simulated position does not slip back to the real
+          one the moment you switch away.
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: >-
           Anole shows your real location on the map to compare it with the simulated location.
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: >-

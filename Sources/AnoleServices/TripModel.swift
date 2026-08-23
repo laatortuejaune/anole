@@ -313,6 +313,7 @@ public final class TripModel: ObservableObject {
         // seconds. The keep-alive existed only after a trip arrived, so a plain
         // teleport drifted away on its own.
         startKeepAlive()
+        updateBackgroundHold()
     }
 
     private func pushCurrent() async {
@@ -651,6 +652,7 @@ public final class TripModel: ObservableObject {
         guard let schedule, tripState != .playing else { return }
         stopKeepAlive()
         tripState = .playing
+        updateBackgroundHold()
 
         tripTask = Task { [weak self] in
             guard let self else { return }
@@ -727,6 +729,8 @@ public final class TripModel: ObservableObject {
             pushedCoordinate = nil
         }
         currentCoordinate = nil
+        // Nothing left to hold: give the location radio back.
+        realLocation.endBackgroundHold()
         pendingPoint = nil
         customStart = nil
         gpxTrack = nil
@@ -804,15 +808,35 @@ public final class TripModel: ObservableObject {
     /// Whether the trip was playing when the app left the foreground.
     private var resumeWhenActive = false
 
+    /// Starts or stops the background hold according to whether anything is
+    /// currently being held on the device.
+    ///
+    /// It is not free — the location radio stays on — so it runs only while
+    /// there is a position to keep alive, and stops the moment there is not.
+    private func updateBackgroundHold() {
+        let holding = currentCoordinate != nil
+            && (tripState == .playing || tripState == .paused
+                || tripState == .arrived || tripState == .idle)
+        if holding {
+            realLocation.beginBackgroundHold()
+        } else {
+            realLocation.endBackgroundHold()
+        }
+    }
+
     /// The app is leaving the foreground.
     ///
-    /// iOS suspends the process: nothing is emitted any more and the device
-    /// finds its real position again. That cannot be prevented without a
-    /// background mode, which a free developer account cannot have — but the
-    /// second half can. `ContinuousClock` keeps counting while suspended, so a
-    /// trip left running would come back having jumped forward by the whole
-    /// suspended interval. Pausing keeps the schedule honest.
+    /// With the hold in place the process keeps running and the trip carries on
+    /// — which is the entire point, since the app you actually want to fool is
+    /// the one you just switched to.
+    ///
+    /// Without it, iOS is about to suspend us. Nothing will be emitted and the
+    /// device will find its real position again; that part cannot be helped.
+    /// What can is the return: `ContinuousClock` counts through a suspension,
+    /// so a trip left running comes back having jumped forward by the whole
+    /// interval. Pausing keeps the schedule honest.
     public func applicationWillResignActive() {
+        if realLocation.isHoldingInBackground { return }
         resumeWhenActive = tripState == .playing
         if resumeWhenActive { pauseTrip() }
         stopKeepAlive()
@@ -820,6 +844,7 @@ public final class TripModel: ObservableObject {
 
     /// The app is back in the foreground.
     public func applicationDidBecomeActive() {
+        updateBackgroundHold()
         if resumeWhenActive {
             resumeWhenActive = false
             tripState = .paused

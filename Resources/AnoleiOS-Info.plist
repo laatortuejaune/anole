@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Everything else in this app's Info.plist comes from the INFOPLIST_KEY_*
+	  settings in project.yml, which is where new keys belong. This file exists
+	  for the one key Xcode has no generated setting for: UIBackgroundModes is
+	  absent from its list, so it cannot be expressed as INFOPLIST_KEY_ at all.
+	  Xcode merges what is here with what it generates.
+
+	  `location` is what lets the app keep running once you switch to the app
+	  you actually want to fool. Without it iOS suspends Anole, nothing is
+	  pushed any more, and the device finds its real position again within
+	  seconds. Unlike the VPN entitlement, this is a plain Info.plist key: a
+	  free developer account can ship it.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+</dict>
+</plist>

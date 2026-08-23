@@ -99,6 +99,63 @@ public final class DeviceLocationProvider: NSObject, ObservableObject {
         return fix
     }
 
+
+    // MARK: - Staying alive in the background
+
+    #if os(iOS)
+    /// Whether the app is currently holding itself awake.
+    @Published public private(set) var isHoldingInBackground = false
+
+    /// True once the user has granted "Always", which is what the hold needs.
+    public var canHoldInBackground: Bool {
+        manager.authorizationStatus == .authorizedAlways
+    }
+
+    /// Asks for "Always". iOS shows its own dialogue; the answer arrives
+    /// through the delegate.
+    public func requestAlwaysAuthorization() {
+        manager.requestAlwaysAuthorization()
+    }
+
+    /// Keeps the process running while a simulated position must be held.
+    ///
+    /// iOS suspends an app the moment it leaves the foreground, and a suspended
+    /// app pushes nothing — so the device finds its real position again within
+    /// seconds, which is exactly when it matters, since the whole point is to
+    /// be in *another* app. Declaring the location background mode and keeping
+    /// a location stream running is what earns the process the right to stay
+    /// awake.
+    ///
+    /// The accuracy is dropped to its coarsest while holding: the fix itself is
+    /// never used here, only the fact that one is being delivered, and the
+    /// radio is what costs battery.
+    public func beginBackgroundHold() {
+        guard !isHoldingInBackground, canHoldInBackground else { return }
+        manager.allowsBackgroundLocationUpdates = true
+        // Left on, iOS may decide the device has stopped moving and pause the
+        // stream — taking the hold down with it.
+        manager.pausesLocationUpdatesAutomatically = false
+        manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+        manager.startUpdatingLocation()
+        isHoldingInBackground = true
+    }
+
+    public func endBackgroundHold() {
+        guard isHoldingInBackground else { return }
+        manager.stopUpdatingLocation()
+        manager.allowsBackgroundLocationUpdates = false
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        isHoldingInBackground = false
+    }
+    #else
+    /// macOS never suspends a running app, so there is nothing to hold.
+    public var isHoldingInBackground: Bool { false }
+    public var canHoldInBackground: Bool { false }
+    public func requestAlwaysAuthorization() {}
+    public func beginBackgroundHold() {}
+    public func endBackgroundHold() {}
+    #endif
+
     /// Opens the settings where the user can fix the authorization.
     public static func openSettings() {
         #if os(macOS)

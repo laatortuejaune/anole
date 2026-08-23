@@ -395,6 +395,26 @@ struct iOSContentView: View {
                     }
                 }
                 Section {
+                    if model.realLocation.canHoldInBackground {
+                        Label("Position held in the background", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Button("Allow \"Always\"") {
+                            model.realLocation.requestAlwaysAuthorization()
+                        }
+                    }
+                } header: {
+                    Text("Leaving the app")
+                } footer: {
+                    Text("iOS suspends Anole as soon as you switch away, and a suspended app "
+                         + "stops pushing: the device finds its real position again within "
+                         + "seconds — right when it matters, since the app you want to fool is "
+                         + "the one you just opened. Granting \"Always\" lets Anole keep its "
+                         + "location stream running, which is what earns it the right to stay "
+                         + "awake. It costs battery, so it only runs while a position is "
+                         + "actually being held.")
+                }
+                Section {
                     Toggle("Read limits from OpenStreetMap", isOn: $model.fetchSpeedLimits)
                 } header: {
                     Text("Speed limits")
