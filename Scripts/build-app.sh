@@ -19,6 +19,14 @@ echo "==> Assembling the bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Anole"
+if [ "$CONFIG" = release ]; then
+    executable="$APP/Contents/MacOS/Anole"
+    strip -S "$executable"
+    if LC_ALL=C grep -aFq '/Users/' "$executable"; then
+        echo "Release executable embeds a local home directory" >&2
+        exit 1
+    fi
+fi
 
 # The Python helper ships with the app. We do not go through `resources:` in
 # Package.swift: the generated accessor looks for the bundle next to the
