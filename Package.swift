@@ -29,7 +29,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AnoleCoreTests",
-            dependencies: ["AnoleCore"],
+            dependencies: ["AnoleCore", "AnoleServices"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

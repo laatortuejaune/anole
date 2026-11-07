@@ -125,6 +125,20 @@ xattr -dr com.apple.quarantine /Applications/Anole.app
 Then run `./Scripts/setup-backend.sh` once, from a checkout of this repository,
 to install the Python helper the app drives.
 
+## Check location changes on an iPhone
+
+1. Enable Developer Mode, connect the unlocked iPhone over USB and accept the
+   trust prompt if it appears. Select it under **Device**, then click **Connect
+   device**. Open a location-aware app on the phone and allow location access.
+2. In Anole, click the map near the Golden Gate Bridge and choose **Put me here**.
+   In the iPhone app, request a fresh location and check that it shows the bridge.
+3. Repeat at the San Francisco Ferry Building. The next location update should
+   move across the city. A map that stays centered on its previous viewport may
+   need its current-location button.
+4. While the phone is still connected, click **Clear everything**. This also
+   clears the current route and recording. Wait for a fresh fix in the iPhone
+   app and verify that it shows your actual area again before disconnecting.
+
 ## Building
 
 Building needs the full Xcode, not the command line tools alone: SwiftUI's
