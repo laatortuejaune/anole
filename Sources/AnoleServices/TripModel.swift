@@ -725,7 +725,12 @@ public final class TripModel: ObservableObject {
     public func resetEverything() async {
         await stopEverything()
         if pushedCoordinate != nil {
-            try? await backend.clearLocation(settlingNear: realLocation.fix?.coordinate)
+            do {
+                try await backend.clearLocation(settlingNear: realLocation.fix?.coordinate)
+            } catch {
+                report(error)
+                return
+            }
             pushedCoordinate = nil
         }
         currentCoordinate = nil
